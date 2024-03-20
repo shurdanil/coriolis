@@ -100,8 +100,9 @@ class WSManConnection(object):
     def _exec_command(self, cmd, args=[], timeout=None):
         timeout = int(timeout or self._conn_timeout)
         self.set_timeout(timeout)
-        shell_id = self._protocol.open_shell(codepage=CODEPAGE_UTF8)
+        shell_id = None
         try:
+            shell_id = self._protocol.open_shell(codepage=CODEPAGE_UTF8)
             command_id = self._protocol.run_command(shell_id, cmd, args)
             try:
                 (std_out,
@@ -115,8 +116,21 @@ class WSManConnection(object):
                 self._protocol.cleanup_command(shell_id, command_id)
 
             return (std_out, std_err, exit_code)
+        except winrm_exceptions.InvalidCredentialsError as ex:
+            raise exception.NotAuthorized(
+                message="The WinRM connection credentials are invalid. "
+                        "If you are using a template with a default "
+                        "pre-baked username/password, please ensure "
+                        "that you have passed the credentials to the "
+                        "destination Coriolis plugin you have selected,"
+                        " either via the Target Environment parameters "
+                        "set when creating the Migration/Replica, or "
+                        "by setting it in the destination plugin's "
+                        "dedicated section of the coriolis.conf "
+                        "static configuration file.") from ex
         finally:
-            self._protocol.close_shell(shell_id)
+            if shell_id:
+                self._protocol.close_shell(shell_id)
 
     def exec_command(self, cmd, args=[], timeout=None):
         LOG.debug("Executing WSMAN command: %s", str([cmd] + args))
